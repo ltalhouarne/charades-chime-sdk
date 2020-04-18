@@ -27,3 +27,8 @@
 .logo {
   font-family: 'Sacramento', cursive;
 }
+
+.error {
+  font-family: 'Bangers', cursive;
+  font-size: 18px !important;
+}
