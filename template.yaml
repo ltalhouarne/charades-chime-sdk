@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
-Description: Video Help Desk
+Description: Charades
 Globals:
   Function:
     Runtime: nodejs10.x
@@ -13,11 +13,11 @@ Globals:
           - !Ref AWS::Region
           - !Ref AWS::AccountId
           - layer
-          - video-help-desk-layer
+          - charades-layer
           - 1
     Environment:
       Variables:
-        TICKETS_TABLE_NAME: !Ref Tickets
+        TICKETS_TABLE_NAME: !Ref Games
 Resources:
   ChimeMeetingsAccessPolicy:
     Type: 'AWS::IAM::Policy'
@@ -36,21 +36,10 @@ Resources:
             Resource: '*'
       Roles:
         - Ref: WebsiteLambdaRole
-        - Ref: HelpDeskLambdaRole
-        - Ref: CreateTicketLambdaRole
-        - Ref: GetTicketsLambdaRole
-        - Ref: GetTicketLambdaRole
-        - Ref: DeleteTicketLambdaRole
-  Tickets:
+  Games:
     Type: 'AWS::DynamoDB::Table'
     Properties:
       BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: TicketId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: TicketId
-          KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: TTL
         Enabled: true
@@ -59,81 +48,81 @@ Resources:
     Properties:
       Handler: handlers.website
       Runtime: nodejs10.x
-      CodeUri: dist/
+      CodeUri: build/
       Events:
         Api1:
           Type: Api
           Properties:
             Path: /
             Method: GET
-  HelpDeskLambda:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      Handler: handlers.helpDesk
-      Runtime: nodejs10.x
-      CodeUri: dist/
-      Events:
-        Api1:
-          Type: Api
-          Properties:
-            Path: /helpdesk
-            Method: GET
-  CreateTicketLambda:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      Handler: handlers.createTicket
-      CodeUri: dist/
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Tickets
-      Events:
-        Api1:
-          Type: Api
-          Properties:
-            Path: /tickets
-            Method: POST
-  GetTicketsLambda:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      Handler: handlers.getTickets
-      CodeUri: dist/
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Tickets
-      Events:
-        Api1:
-          Type: Api
-          Properties:
-            Path: /tickets
-            Method: GET
-  GetTicketLambda:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      Handler: handlers.getTicket
-      CodeUri: dist/
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Tickets
-      Events:
-        Api1:
-          Type: Api
-          Properties:
-            Path: /ticket
-            Method: GET
-  DeleteTicketLambda:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      Handler: handlers.deleteTicket
-      CodeUri: dist/
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref Tickets
-      Events:
-        Api1:
-          Type: Api
-          Properties:
-            Path: /ticket
-            Method: DELETE
+  # HelpDeskLambda:
+  #   Type: 'AWS::Serverless::Function'
+  #   Properties:
+  #     Handler: handlers.helpDesk
+  #     Runtime: nodejs10.x
+  #     CodeUri: dist/
+  #     Events:
+  #       Api1:
+  #         Type: Api
+  #         Properties:
+  #           Path: /helpdesk
+  #           Method: GET
+  # CreateTicketLambda:
+  #   Type: 'AWS::Serverless::Function'
+  #   Properties:
+  #     Handler: handlers.createTicket
+  #     CodeUri: dist/
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref Tickets
+  #     Events:
+  #       Api1:
+  #         Type: Api
+  #         Properties:
+  #           Path: /tickets
+  #           Method: POST
+  # GetTicketsLambda:
+  #   Type: 'AWS::Serverless::Function'
+  #   Properties:
+  #     Handler: handlers.getTickets
+  #     CodeUri: dist/
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref Tickets
+  #     Events:
+  #       Api1:
+  #         Type: Api
+  #         Properties:
+  #           Path: /tickets
+  #           Method: GET
+  # GetTicketLambda:
+  #   Type: 'AWS::Serverless::Function'
+  #   Properties:
+  #     Handler: handlers.getTicket
+  #     CodeUri: dist/
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref Tickets
+  #     Events:
+  #       Api1:
+  #         Type: Api
+  #         Properties:
+  #           Path: /ticket
+  #           Method: GET
+  # DeleteTicketLambda:
+  #   Type: 'AWS::Serverless::Function'
+  #   Properties:
+  #     Handler: handlers.deleteTicket
+  #     CodeUri: dist/
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref Tickets
+  #     Events:
+  #       Api1:
+  #         Type: Api
+  #         Properties:
+  #           Path: /ticket
+  #           Method: DELETE
 Outputs:
   ApiURL:
     Description: "API endpoint URL for Prod environment"

@@ -13,37 +13,6 @@ exports.website = async (event, context, callback) => {
   return getContent(event.path, callback);
 };
 
-function reply(callback, statusCode, result) {
-  callback(null, {
-    statusCode: statusCode,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(result, '', 2) + '\n',
-    isBase64Encoded: false
-  });
-}
-
-function getContent(urlPath, callback) {
-  if (urlPath === '/') {
-      urlPath = '/index.html';
-  }
-
-  fs.readFile(path.join(process.env.LAMBDA_TASK_ROOT, 'build', urlPath), (err, data) => {
-      return done(200, data.toString(),
-          mime.lookup(err ? '/404.html' : urlPath),
-          callback);
-  });
-}
-
-function done(statusCode, body, contentType, callback) {
-  callback(null, {
-      statusCode: statusCode,
-      body: body,
-      headers: {
-          'Content-Type': contentType
-      }
-  });
-}
-
 // exports.helpDesk = async (event, context, callback) => {
 //   return serveWebpage(callback, './helpdesk.html');
 // };
@@ -187,3 +156,43 @@ function done(statusCode, body, contentType, callback) {
 //     TicketId: ticketId,
 //   });
 // };
+
+function reply(callback, statusCode, result) {
+  callback(null, {
+    statusCode: statusCode,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(result, '', 2) + '\n',
+    isBase64Encoded: false
+  });
+}
+
+function getContent(urlPath, callback) {
+  if (urlPath === '/') {
+      urlPath = '/index.html';
+  }
+
+  fs.readFile(path.join(process.env.LAMBDA_TASK_ROOT, 'lambda/release/build', urlPath), (err, data) => {
+      return done(200, data.toString(),
+          mime.lookup(err ? '/404.html' : urlPath),
+          callback);
+});
+}
+
+function done(statusCode, body, contentType, callback) {
+  callback(null, {
+      statusCode: statusCode,
+      body: body,
+      headers: {
+          'Content-Type': contentType
+      }
+  });
+}
+
+function serveWebpage(callback, page) {
+  callback(null, {
+    statusCode: 200,
+    headers: { 'Content-Type': 'text/html' },
+    body: fs.readFileSync(page, { encoding: 'utf8' }),
+    isBase64Encoded: false
+  });
+}
