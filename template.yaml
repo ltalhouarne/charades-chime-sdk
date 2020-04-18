@@ -46,7 +46,7 @@ Resources:
   WebsiteLambda:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Handler: handlers.website
+      Handler: lambda/handlers.website
       Runtime: nodejs10.x
       CodeUri: build/
       Events:
