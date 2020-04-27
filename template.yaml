@@ -17,32 +17,37 @@ Globals:
           - 1
     Environment:
       Variables:
-        TICKETS_TABLE_NAME: !Ref Games
+        GAMES_TABLE_NAME: !Ref Games
+        PLAYERS_TABLE_NAME: !Ref Players
 Resources:
-  ChimeMeetingsAccessPolicy:
-    Type: 'AWS::IAM::Policy'
-    Properties:
-      PolicyName: ChimeMeetingsAccess
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action:
-              - 'chime:GetMeeting'
-              - 'chime:CreateMeeting'
-              - 'chime:DeleteMeeting'
-              - 'chime:CreateAttendee'
-              - 'chime:DeleteAttendee'
-            Resource: '*'
-      Roles:
-        - Ref: WebsiteLambdaRole
   Games:
     Type: 'AWS::DynamoDB::Table'
     Properties:
       BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: GameRoomCode
+          AttributeType: S
+      KeySchema:
+        - AttributeName: GameRoomCode
+          KeyType: HASH
       TimeToLiveSpecification:
         AttributeName: TTL
         Enabled: true
+  
+  Players:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PlayerId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PlayerId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true      
+
   WebsiteLambda:
     Type: 'AWS::Serverless::Function'
     Properties:
@@ -55,74 +60,80 @@ Resources:
           Properties:
             Path: /
             Method: GET
-  # HelpDeskLambda:
-  #   Type: 'AWS::Serverless::Function'
-  #   Properties:
-  #     Handler: handlers.helpDesk
-  #     Runtime: nodejs10.x
-  #     CodeUri: dist/
-  #     Events:
-  #       Api1:
-  #         Type: Api
-  #         Properties:
-  #           Path: /helpdesk
-  #           Method: GET
-  # CreateTicketLambda:
-  #   Type: 'AWS::Serverless::Function'
-  #   Properties:
-  #     Handler: handlers.createTicket
-  #     CodeUri: dist/
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref Tickets
-  #     Events:
-  #       Api1:
-  #         Type: Api
-  #         Properties:
-  #           Path: /tickets
-  #           Method: POST
-  # GetTicketsLambda:
-  #   Type: 'AWS::Serverless::Function'
-  #   Properties:
-  #     Handler: handlers.getTickets
-  #     CodeUri: dist/
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref Tickets
-  #     Events:
-  #       Api1:
-  #         Type: Api
-  #         Properties:
-  #           Path: /tickets
-  #           Method: GET
-  # GetTicketLambda:
-  #   Type: 'AWS::Serverless::Function'
-  #   Properties:
-  #     Handler: handlers.getTicket
-  #     CodeUri: dist/
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref Tickets
-  #     Events:
-  #       Api1:
-  #         Type: Api
-  #         Properties:
-  #           Path: /ticket
-  #           Method: GET
-  # DeleteTicketLambda:
-  #   Type: 'AWS::Serverless::Function'
-  #   Properties:
-  #     Handler: handlers.deleteTicket
-  #     CodeUri: dist/
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref Tickets
-  #     Events:
-  #       Api1:
-  #         Type: Api
-  #         Properties:
-  #           Path: /ticket
-  #           Method: DELETE
+        getProxy:
+          Type: Api
+          Properties:
+            Path: '/{proxy+}'
+            Method: GET  
+
+  JoinGameRoomLambda:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: handlers.joinGameRoom
+      Runtime: nodejs10.x
+      CodeUri: build/
+      Policies:
+        - Statement: 
+          - Sid: Dynamo
+            Action: ['dynamodb:*']
+            Effect: Allow
+            Resource: ['*']
+          - Sid: Chime
+            Action: ['chime:*']
+            Effect: Allow
+            Resource: ['*']   
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /gameroom/join
+            Method: POST
+  
+  GetGameRoomLambda:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: handlers.getGameRoom
+      Runtime: nodejs10.x
+      CodeUri: build/
+      Policies:
+        - Statement: 
+          - Sid: Dynamo
+            Action: ['dynamodb:*']
+            Effect: Allow
+            Resource: ['*']
+          - Sid: Chime
+            Action: ['chime:*']
+            Effect: Allow
+            Resource: ['*']   
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /gameroom/details
+            Method: POST 
+
+  CreateGameRoomLambda:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: handlers.createGameroom
+      Runtime: nodejs10.x
+      CodeUri: build/
+      Policies:
+        - Statement: 
+          - Sid: Dynamo
+            Action: ['dynamodb:*']
+            Effect: Allow
+            Resource: ['*']
+          - Sid: Chime
+            Action: ['chime:*']
+            Effect: Allow
+            Resource: ['*']   
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /gameroom/new
+            Method: POST
 Outputs:
   ApiURL:
     Description: "API endpoint URL for Prod environment"

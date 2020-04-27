@@ -1,0 +1,8 @@
+{
+  "name": "chime-charades-lambdas",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "mime-types": "^2.1.26"
+  }
+}

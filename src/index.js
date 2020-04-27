@@ -5,12 +5,14 @@ import App from './App';
 import { BrowserRouter, Switch, Route } from "react-router-dom";
 import * as serviceWorker from './serviceWorker';
 import GameRoom from './components/gameroom/GameRoom';
+import JoinGameRoom from './components/gameroom/JoinGameRoom';
 
 ReactDOM.render(
-  <BrowserRouter>
+  <BrowserRouter basename="/Prod">
     <Switch>
       <Route exact path="/" component={App}/>
       <Route path="/gameroom" component={GameRoom}/>
+      <Route path="/join" component={JoinGameRoom}/>
     </Switch>
   </BrowserRouter>,
   document.getElementById('root')

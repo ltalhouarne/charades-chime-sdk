@@ -2,197 +2,179 @@ const AWS = require('aws-sdk');
 const fs = require('fs');
 const uuidv4 = require('uuid/v4');
 const mime = require('mime-types');
+const path = require('path');
 const ddb = new AWS.DynamoDB();
+const docClient = new AWS.DynamoDB.DocumentClient(); 
 const chime = new AWS.Chime({ region: 'us-east-1' });
 chime.endpoint = new AWS.Endpoint('https://service.chime.aws.amazon.com/console');
 
 exports.website = async (event, context, callback) => {
-  if (event.path === '/') {
-    event.path = '/index.html'
-  }
   return getContent(event.path, callback);
 };
 
-// exports.helpDesk = async (event, context, callback) => {
-//   return serveWebpage(callback, './helpdesk.html');
-// };
+exports.getGameRoom = async (event, context, callback) => {
+  if (!event.queryStringParameters || !event.queryStringParameters.Game) {
+    return reply(callback, 400, { Error: 'Must provide GameRoomCode query parameter' });
+  }
 
-// exports.createTicket = async (event, context, callback) => {
-//   if (!event.queryStringParameters || !event.queryStringParameters.CustomerName) {
-//     return reply(callback, 400, {Error: 'Must provide CustomerName query parameter'});
-//   }
+  let gameRoom;
+  try {
+    var result = await ddb.getItem({
+      Key: { GameRoomCode: { S: event.queryStringParameters.GameRoomCode, }, },
+      TableName: process.env.GAMES_TABLE_NAME,
+    }).promise();
+    gameRoom = result.Item;
+    if (!gameRoom) {
+      throw new Error('Gameroom not found');
+    }
+  } catch (err) {
+    return reply(callback, 404, {Error: `Gameroom does not exist: ${event.queryStringParameters.GameRoomCode}`});
+  }
 
-//   const meeting = await chime.createMeeting({
-//     ClientRequestToken: uuidv4(),
-//     MediaRegion: 'us-east-1',
-//   }).promise();
+  return reply(callback, 200, {
+    GameRoom: gameRoom
+  });
+}
 
-//   const meetingId = meeting.Meeting.MeetingId;
+exports.joinGameRoom = async (event, context, callback) => {
+  if (!event.queryStringParameters || !event.queryStringParameters.DisplayName) {
+    return reply(callback, 400, { Error: 'Must provide DisplayName query parameter' });
+  }
 
-//   const customerAttendee = await chime.createAttendee({
-//     MeetingId: meetingId,
-//     ExternalUserId: uuidv4(),
-//   }).promise();
+  if (!event.queryStringParameters || !event.queryStringParameters.GameRoomCode) {
+    return reply(callback, 400, { Error: 'Must provide GameRoomCode query parameter' });
+  }
 
-//   const helpDeskAttendee = await chime.createAttendee({
-//     MeetingId: meetingId,
-//     ExternalUserId: uuidv4(),
-//   }).promise();
+  let gameRoom;
+  try {
+    var result = await ddb.getItem({
+      Key: { GameRoomCode: { S: event.queryStringParameters.GameRoomCode, }, },
+      TableName: process.env.GAMES_TABLE_NAME,
+    }).promise();
+    gameRoom = result.Item;
+    if (!gameRoom) {
+      throw new Error('Gameroom not found');
+    }
+  } catch (err) {
+    return reply(callback, 404, {Error: `Gameroom does not exist: ${event.queryStringParameters.GameRoomCode}`});
+  }
 
-//   const ticketId = uuidv4();
+  let meeting;
+  try {
+    meeting = await chime.getMeeting({
+      MeetingId: gameRoom.MeetingId.S
+    }).promise();
+  } catch (err) {
+    return reply(callback, 404, {Error: `Meeting no longer exists for Gameroom: ${event.queryStringParameters.GameRoomCode}`});
+  }
 
-//   await ddb.putItem({
-//     Item: {
-//       'TicketId': { S: ticketId },
-//       'CreatedOnDate': {S: (new Date()).toISOString() },
-//       'Meeting': { S: JSON.stringify(meeting) },
-//       'MeetingId': { S: meetingId },
-//       'CustomerName': { S: event.queryStringParameters.CustomerName },
-//       'CustomerAttendee': { S: JSON.stringify(customerAttendee) },
-//       'HelpDeskAttendee': { S: JSON.stringify(helpDeskAttendee) },
-//       'TTL': { N: `${Math.floor(Date.now() / 1000) + 86400}` },
-//     },
-//     TableName: process.env.TICKETS_TABLE_NAME,
-//   }).promise();
+  const meetingId = meeting.Meeting.MeetingId;
 
-//   return reply(callback, 201, {
-//     TicketId: ticketId,
-//     Meeting: meeting,
-//     CustomerAttendee: customerAttendee,
-//   });
-// };
+  const playerAttendee = await chime.createAttendee({
+    MeetingId: meetingId,
+    ExternalUserId: uuidv4(),
+  }).promise();
 
-// exports.getTickets = async (event, context, callback) => {
-//   return reply(callback, 200, (await ddb.scan({
-//     TableName: process.env.TICKETS_TABLE_NAME,
-//   }).promise()).Items.sort((a, b) => {
-//     if (a.CreatedOnDate.S < b.CreatedOnDate.S) return -1;
-//     if (a.CreatedOnDate.S > b.CreatedOnDate.S) return 1;
-//     return 0;
-//   }).map(item => {
-//     return {
-//       TicketId: item.TicketId.S,
-//       CreatedOnDate: item.CreatedOnDate.S,
-//       CustomerName: item.CustomerName.S,
-//     };
-//   }));
-// };
+  await ddb.putItem({
+    Item: {
+      'PlayerId': { S: playerAttendee.Attendee.AttendeeId },
+      'GameRoomCode': { S: event.queryStringParameters.GameRoomCode },
+      'DisplayName': { S: event.queryStringParameters.DisplayName },
+      'CreatedOnDate': {S: (new Date()).toISOString() },
+      'TTL': { N: `${Math.floor(Date.now() / 1000) + 86400}` },
+    },
+    TableName: process.env.PLAYERS_TABLE_NAME,
+  }).promise();
 
-// exports.getTicket = async (event, context, callback) => {
-//   if (!event.queryStringParameters || !event.queryStringParameters.TicketId) {
-//     return reply(callback, 400, {Error: 'Must provide TicketId query parameter'});
-//   }
+  await docClient.update({
+      TableName: process.env.GAMES_TABLE_NAME,
+      Key: {
+        "GameRoomCode": event.queryStringParameters.GameRoomCode
+      },
+      UpdateExpression: "SET #p = list_append(#p, :vals)",
+      ExpressionAttributeNames: {
+        "#p": "Players"
+      },
+      ExpressionAttributeValues: {
+        ":vals": [ `{ PlayerId: ${playerAttendee.Attendee.AttendeeId}, Username: ${event.queryStringParameters.DisplayName} }` ]   
+      },
+      ReturnValues: "UPDATED_NEW"
+    }).promise();
 
-//   const ticketId = event.queryStringParameters.TicketId;
+  return reply(callback, 200, {
+    Meeting: meeting,
+    PlayerAttendee: playerAttendee,
+    GameRoom: gameRoom
+  });
+};
 
-//   let item;
-//   try {
-//     result = await ddb.getItem({
-//       Key: { TicketId: { S: ticketId, }, },
-//       TableName: process.env.TICKETS_TABLE_NAME,
-//     }).promise();
-//     item = result.Item;
-//     if (!item) {
-//       throw new Error('TicketId not found');
-//     }
-//   } catch (err) {
-//     return reply(callback, 404, {Error: `TicketId does not exist: ${ticketId}`});
-//   }
+exports.createGameroom = async (event, context, callback) => {
+  if (!event.queryStringParameters || !event.queryStringParameters.DisplayName) {
+    return reply(callback, 400, { Error: 'Must provide DisplayName query parameter' });
+  }
 
-//   const meetingId = item.MeetingId.S;
-//   try {
-//     await chime.getMeeting({
-//       MeetingId: meetingId
-//     }).promise();
-//   } catch (err) {
-//     await ddb.deleteItem({
-//       Key: { TicketId: { S: ticketId, }, },
-//       TableName: process.env.TICKETS_TABLE_NAME,
-//     }).promise();
-//     return reply(callback, 404, {Error: `Meeting no longer exists for TicketId: ${ticketId}`});
-//   }
+  const meeting = await chime.createMeeting({
+    ClientRequestToken: uuidv4(),
+    MediaRegion: 'us-west-2',
+  }).promise();
 
-//   return reply(callback, 200, {
-//     TicketId: item.TicketId.S,
-//     CreatedOnDate: item.CreatedOnDate.S,
-//     Meeting: JSON.parse(item.Meeting.S).Meeting,
-//     CustomerName: item.CustomerName.S,
-//     HelpDeskAttendee: JSON.parse(item.HelpDeskAttendee.S).Attendee,
-//   });
-// };
+  const meetingId = meeting.Meeting.MeetingId;
 
-// exports.deleteTicket = async (event, context, callback) => {
-//   if (!event.queryStringParameters || !event.queryStringParameters.TicketId) {
-//     return reply(callback, 400, {Error: 'Must provide TicketId query parameter'});
-//   }
+  const playerAttendee = await chime.createAttendee({
+    MeetingId: meetingId,
+    ExternalUserId: uuidv4(),
+  }).promise();
 
-//   const ticketId = event.queryStringParameters.TicketId;
+  const fourLetterMeeting = Math.random().toString(36).substr(2, 4)
+  const creationDate = (new Date()).toISOString()
 
-//   let item;
-//   try {
-//     result = await ddb.getItem({
-//       Key: { TicketId: { S: ticketId, }, },
-//       TableName: process.env.TICKETS_TABLE_NAME,
-//     }).promise();
-//     item = result.Item;
-//     if (!item) {
-//       throw new Error('TicketId not found');
-//     }
-//   } catch (err) {
-//     return reply(callback, 404, {Error: `TicketId does not exist: ${ticketId}`});
-//   }
+  var gameRoom = {
+    'GameRoomCode': { S: fourLetterMeeting },
+    'MeetingId': { S: meetingId },
+    'CreatedOnDate': {S: creationDate },
+    'Players': { L: [ { "S" : `{ PlayerId: ${playerAttendee.Attendee.AttendeeId}, Username: ${event.queryStringParameters.DisplayName} }` } ] },
+    'TTL': { N: `${Math.floor(Date.now() / 1000) + 86400}` },
+  }
 
-//   const meetingId = item.MeetingId.S;
-//   await ddb.deleteItem({
-//     Key: { TicketId: { S: ticketId, }, },
-//     TableName: process.env.TICKETS_TABLE_NAME,
-//   }).promise();
+  await ddb.putItem({
+    Item: gameRoom,
+    TableName: process.env.GAMES_TABLE_NAME,
+  }).promise();
 
-//   await chime.deleteMeeting({
-//     MeetingId: meetingId,
-//   }).promise();
+  await ddb.putItem({
+    Item: {
+      'PlayerId': { S: playerAttendee.Attendee.AttendeeId },
+      'GameRoomCode': { S: fourLetterMeeting },
+      'DisplayName': { S: event.queryStringParameters.DisplayName },
+      'CreatedOnDate': {S: creationDate },
+      'TTL': { N: `${Math.floor(Date.now() / 1000) + 86400}` },
+    },
+    TableName: process.env.PLAYERS_TABLE_NAME,
+  }).promise();
 
-//   return reply(callback, 200, {
-//     TicketId: ticketId,
-//   });
-// };
+  return reply(callback, 200, {
+    GameCode: fourLetterMeeting,
+    Meeting: meeting,
+    PlayerAttendee: playerAttendee,
+    Gameroom: gameRoom
+  });
+};
 
-function reply(callback, statusCode, result) {
+function getContent(urlPath, callback) {
   callback(null, {
-    statusCode: statusCode,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(result, '', 2) + '\n',
+    statusCode: 200,
+    headers: { 'Content-Type': mime.lookup( urlPath === '/' ? '/index.html' : urlPath) },
+    body: fs.readFileSync(path.join(process.env.LAMBDA_TASK_ROOT, './', urlPath === '/' ? '/index.html' : urlPath), { encoding: 'utf8' }),
     isBase64Encoded: false
   });
 }
 
-function getContent(urlPath, callback) {
-  if (urlPath === '/') {
-      urlPath = '/index.html';
-  }
-
-  fs.readFile(path.join(process.env.LAMBDA_TASK_ROOT, 'lambda/release/build', urlPath), (err, data) => {
-      return done(200, data.toString(),
-          mime.lookup(err ? '/404.html' : urlPath),
-          callback);
-});
-}
-
-function done(statusCode, body, contentType, callback) {
+function reply(callback, statusCode, result) {
   callback(null, {
-      statusCode: statusCode,
-      body: body,
-      headers: {
-          'Content-Type': contentType
-      }
-  });
-}
-
-function serveWebpage(callback, page) {
-  callback(null, {
-    statusCode: 200,
-    headers: { 'Content-Type': 'text/html' },
-    body: fs.readFileSync(page, { encoding: 'utf8' }),
+    statusCode: statusCode,
+    //TODO: remove cors
+    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    body: JSON.stringify(result, '', 2) + '\n',
     isBase64Encoded: false
   });
 }

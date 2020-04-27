@@ -7,11 +7,8 @@ import Col from 'react-bootstrap/Col';
 import Row from 'react-bootstrap/Row';
 import Alert from 'react-bootstrap/Alert';
 import {
-  BrowserRouter as Router,
-  Link,
-  Route
+  BrowserRouter as Router
 } from "react-router-dom";
-import GameRoom from './components/gameroom/GameRoom';
 
 class App extends React.Component {
   constructor(props) {
@@ -20,18 +17,18 @@ class App extends React.Component {
     this.state = { username: "", error: "" };
   }
 
-  joinRoom (e) {
+  joinRoom(e, newRoom) {
     e.preventDefault()
 
     if (this.state.username.length <= 0) {
       this.setState({error: "Please provide a display name to continue"})
     } else {
       this.props.history.push({
-        pathname: '/gameroom',
-        state: { username: this.state.username }
+        pathname: newRoom ? '/gameroom' : '/join',
+        state: { username: this.state.username, baseUrl: "https://4t4digur8a.execute-api.us-west-2.amazonaws.com/Prod" }
       })
     }
-	}
+  }
 
   render() {
     return (
@@ -57,7 +54,11 @@ class App extends React.Component {
                     onsize="lg" type="text" placeholder="Display Name" />
                   </Col>
                 </Form.Row>
-                <Button onClick={this.joinRoom} className="submit-button" variant="light">Join the game room</Button>
+                <br/>
+                <Button onClick={(e) => this.joinRoom(e, true)} className="submit-button" variant="light">Create a game room</Button>
+                <br/>
+                <Button onClick={(e) => this.joinRoom(e, false)} className="submit-button" variant="light">Join an existing game room</Button>
+
               </Form.Group>
               {this.state.error && 
               <Row className="justify-content-md-center">
